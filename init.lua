@@ -9,6 +9,7 @@ local common = require "core.common"
 local command = require "core.command"
 local style = require "core.style"
 local gitdiff = require "plugins.gitdiff_highlight.gitdiff"
+local tmp_path = os.tmpname()
 
 -- vscode defaults
 style.gitdiff_addition = style.gitdiff_addition or { common.color "#587c0c" }
@@ -69,12 +70,20 @@ local function update_diff(doc)
 	max_diff_size = config.plugins.gitdiff_highlight.max_diff_size * finfo.size
 	local diff_proc = process.start({
 		"git", "-C", path, "diff", "HEAD", "--word-diff",
-		"--unified=1", "--no-color", full_path
+		"--unified=1", "--no-color", "--output=" .. tmp_path, full_path
 	})
 	while diff_proc:running() do
 		coroutine.yield(0.1)
 	end
-	diffs[doc] = gitdiff.changed_lines(diff_proc:read_stdout(max_diff_size))
+	local raw_diff = ""
+	local f = io.open(tmp_path, "rb")
+	if f then
+		raw_diff = f:read("*a") or ""
+		f:close()
+	end
+	os.remove(tmp_path)
+	
+	diffs[doc] = gitdiff.changed_lines(raw_diff)
 	diffs[doc].is_in_repo = true
 end
 
